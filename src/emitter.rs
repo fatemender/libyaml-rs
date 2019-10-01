@@ -10,7 +10,6 @@ use crate::{EmitterError, Event};
 /// Emitter.
 pub struct Emitter<'a> {
     inner: sys::yaml_emitter_t,
-    must_free: bool,
     writer: Box<dyn io::Write + 'a>,
     writer_error: Option<io::Error>,
 }
@@ -28,7 +27,6 @@ impl<'a> Emitter<'a> {
         if unsafe { sys::yaml_emitter_initialize(&mut inner) } == 1 {
             let mut emitter = Box::new(Self {
                 inner,
-                must_free: true,
                 writer: Box::new(writer),
                 writer_error: None,
             });
@@ -84,10 +82,8 @@ impl<'a> Emitter<'a> {
 
 impl Drop for Emitter<'_> {
     fn drop(&mut self) {
-        if self.must_free {
-            unsafe {
-                sys::yaml_emitter_delete(&mut self.inner)
-            }
+        unsafe {
+            sys::yaml_emitter_delete(&mut self.inner)
         }
     }
 }
