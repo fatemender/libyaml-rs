@@ -4,7 +4,7 @@ use std::ptr;
 
 use libyaml_sys as sys;
 
-use crate::{Encoding, EventError, MappingStyle, ScalarStyle, SequenceStyle};
+use crate::{Encoding, EventError, EventType, MappingStyle, ScalarStyle, SequenceStyle};
 
 /// Emitter or parser event.
 pub struct Event {
@@ -220,20 +220,23 @@ impl Event {
         if ret == 1 { Ok(event) } else { Err(EventError) }
     }
 
-    /// Take ownership of a raw initialized `yaml_event_t`.
-    pub unsafe fn from_raw(inner: sys::yaml_event_t) -> Self {
-        Self {
-            inner: Box::new(inner),
-        }
+    /// Return the event type.
+    pub fn type_(&self) -> Option<EventType> {
+        EventType::from_raw(self.inner.type_)
     }
 
-    /// Return the raw `yaml_event_t *`.  It is up to the caller to free the
-    /// event.
+    /// Return raw pointer to the underlying `yaml_event_t`, consuming this
+    /// structure.
     pub fn into_raw(mut self) -> *mut sys::yaml_event_t {
         Box::into_raw(mem::replace(
             &mut self.inner,
             Box::new(unsafe { mem::MaybeUninit::zeroed().assume_init() }),
         ))
+    }
+
+    /// Return raw pointer to the underlying `yaml_event_t`.
+    pub fn as_raw_ptr(&mut self) -> *mut sys::yaml_event_t {
+        &mut *self.inner
     }
 }
 

@@ -55,7 +55,7 @@ impl<'a> Emitter<'a> {
         };
 
         if ret == 1 {
-            assert!(self.writer_error.is_none());
+            debug_assert!(self.writer_error.is_none());
             Ok(())
         } else {
             match mem::replace(&mut self.writer_error, None) {
