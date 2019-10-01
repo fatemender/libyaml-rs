@@ -2,7 +2,7 @@ use std::io;
 
 use libyaml_sys as sys;
 
-use crate::{Emitter, EmitterError, Encoding};
+use crate::{Emitter, EmitterError, Encoding, LineBreak};
 
 /// Builder for emitters.
 pub struct EmitterBuilder<'a> {
@@ -56,6 +56,18 @@ impl<'a> EmitterBuilder<'a> {
         self
     }
 
+    /// Set line break encoding.
+    pub fn line_break(mut self, line_break: LineBreak) -> Self {
+        unsafe {
+            sys::yaml_emitter_set_break(
+                self.emitter.as_raw_ptr(),
+                line_break.into_raw(),
+            )
+        }
+
+        self
+    }
+
     /// Set preferred line width.
     pub fn line_width(mut self, width: usize) -> Self {
         unsafe {
@@ -79,6 +91,4 @@ impl<'a> EmitterBuilder<'a> {
 
         self
     }
-
-    // TODO: line break.
 }

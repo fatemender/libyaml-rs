@@ -67,6 +67,15 @@ impl<'a> Emitter<'a> {
         }
     }
 
+    /// Flush the emitter buffer to writer.
+    pub fn flush(&mut self) -> Result<(), EmitterError> {
+        if unsafe { sys::yaml_emitter_flush(&mut self.inner) } == 1 {
+            Ok(())
+        } else {
+            Err(EmitterError::LibYamlError)
+        }
+    }
+
     /// Return raw pointer to the underlying `yaml_emitter_t`.
     pub fn as_raw_ptr(&mut self) -> *mut sys::yaml_emitter_t {
         &mut self.inner
