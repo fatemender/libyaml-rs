@@ -2,10 +2,54 @@
 //!
 //! [LibYAML]: https://github.com/yaml/libyaml
 //!
-//! # Limitations
+//! # Reading YAML
+//! 
+//! To read a YAML stream, use [`Parser`].  This example counts the number of
+//! alias events in a stream.
 //!
-//! * The document API is deliberately unsupported because it is unsafe by
-//!   design.  
+//! ```
+//! # use std::io;
+//! # use libyaml::*;
+//! #
+//! # fn doctest<R: io::Read>(reader: R) -> Result<(), ParserError> {
+//! let alias_count = Parser::new(reader)?.into_iter().filter(|e| {
+//!     if let Ok(Event::Alias { .. }) = e { true } else { false }
+//! }).count();
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! [`Parser`]: struct.Parser.html
+//!
+//! # Writing YAML
+//!
+//! To write a YAML stream, use [`Emitter`].  This example writes a stream with
+//! a single document consisting of a single scalar.
+//!
+//! ```
+//! # use std::io;
+//! # use libyaml::*;
+//! #
+//! # fn doctest<W: io::Write>(writer: W) -> Result<(), EmitterError> {
+//! let mut emitter = Emitter::new(writer)?;
+//!
+//! emitter.emit(Event::StreamStart { encoding: None })?;
+//! emitter.emit(Event::DocumentStart { implicit: true })?;
+//! emitter.emit(Event::Scalar {
+//!     anchor: None,
+//!     tag: Some(tag::INT.to_string()),
+//!     value: "42".to_string(),
+//!     plain_implicit: false,
+//!     quoted_implicit: false,
+//!     style: None,
+//! })?;
+//! emitter.emit(Event::DocumentEnd { implicit: true })?;
+//! emitter.emit(Event::StreamEnd)?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! [`Emitter`]: struct.Emitter.html
 
 pub mod tag;
 

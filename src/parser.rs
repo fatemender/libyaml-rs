@@ -8,6 +8,12 @@ use libyaml_sys as sys;
 use crate::{Event, ParserError, ParserIter};
 
 /// Parser.
+///
+/// # Iteration
+///
+/// `Box<Parser>` implements `IntoIterator<Item = Result<Event, ParserError>>`,
+/// and thus can be used in `for` loops.  The iterator is fused, and produces
+/// `None` forever after the end of stream or after a first encountered error.
 pub struct Parser<'a> {
     inner: sys::yaml_parser_t,
     reader: Box<dyn io::Read + 'a>,
