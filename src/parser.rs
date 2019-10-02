@@ -47,18 +47,11 @@ impl<'a> Parser<'a> {
 
     /// Parse an event.
     pub fn parse(&mut self) -> Result<Event, ParserError> {
-        let mut event = Event::new();
+        let mut event = unsafe { mem::MaybeUninit::zeroed().assume_init() };
 
-        let ret = unsafe {
-            sys::yaml_parser_parse(
-                &mut self.inner,
-                event.as_raw_ptr(),
-            )
-        };
-
-        if ret == 1 {
+        if unsafe { sys::yaml_parser_parse(&mut self.inner, &mut event) } == 1 {
             debug_assert!(self.reader_error.is_none());
-            Ok(event)
+            Ok(Event::from_raw(event)?)
         } else {
             match mem::replace(&mut self.reader_error, None) {
                 Some(e) => Err(ParserError::IoError(e)),

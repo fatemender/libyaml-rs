@@ -1,255 +1,284 @@
 use std::ffi;
 use std::mem;
+use std::os::raw;
 use std::ptr;
 
 use libyaml_sys as sys;
 
-use crate::{Encoding, EventError, EventType, MappingStyle, ScalarStyle, SequenceStyle};
+use crate::{Encoding, EventError, MappingStyle, ScalarStyle, SequenceStyle};
 
 /// Emitter or parser event.
-pub struct Event {
-    inner: Box<sys::yaml_event_t>,
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum Event {
+    /// A *STREAM-START* event.
+    StreamStart {
+        /// Stream encoding; if `None`, LibYAML will choose an encoding.
+        encoding: Option<Encoding>,
+    },
+
+    /// A *STREAM-END* event.
+    StreamEnd,
+
+    /// A *DOCUMENT-START* event.
+    DocumentStart {
+        /// If true, no document start marker will be emitted.
+        implicit: bool,
+    },
+
+    /// A *DOCUMENT-END* event.
+    DocumentEnd {
+        /// If true, no document end marker will be emitted.
+        implicit: bool,
+    },
+
+    /// An *ALIAS* event.
+    Alias {
+        /// Target anchor name.
+        anchor: String,
+    },
+
+    /// A *SCALAR* event.
+    Scalar {
+        /// Optional anchor name.
+        anchor: Option<String>,
+
+        /// Optional tag name.
+        tag: Option<String>,
+
+        /// Scalar value.
+        value: String,
+
+        /// If true, no tag will be emitted for the plain style.
+        plain_implicit: bool,
+
+        /// If true, no tag will be emitted for the non-plain styles.
+        quoted_implicit: bool,
+
+        /// Scalar style; if `None`, LibYAML will choose a style.
+        style: Option<ScalarStyle>,
+    },
+
+    /// A *SEQUENCE-START* event.
+    SequenceStart {
+        /// Optional anchor name.
+        anchor: Option<String>,
+
+        /// Optional tag name.
+        tag: Option<String>,
+
+        /// If true, no tag will be emitted.
+        implicit: bool,
+
+        /// Sequence style; if `None`, LibYAML will choose a style.
+        style: Option<SequenceStyle>,
+    },
+
+    /// A *SEQUENCE-END* event.
+    SequenceEnd,
+
+    /// A *MAPPING-START* event.
+    MappingStart {
+        /// Optional anchor name.
+        anchor: Option<String>,
+
+        /// Optional tag name.
+        tag: Option<String>,
+
+        /// If true, no tag will be emitted.
+        implicit: bool,
+
+        /// Mapping style; if `None`, LibYAML will choose a style.
+        style: Option<MappingStyle>,
+    },
+
+    /// A *MAPPING-END* event.
+    MappingEnd,
 }
 
 impl Event {
-    /// Create an empty event.
-    pub fn new() -> Self {
-        Self {
-            inner: Box::new(unsafe { mem::MaybeUninit::zeroed().assume_init() }),
+    /// Take ownership of a raw `yaml_event_t`.  This method frees the allocated
+    /// memory, even if the conversion fails.
+    pub fn from_raw(mut raw: sys::yaml_event_t) -> Result<Self, EventError> {
+        fn from_raw_cstr(ptr: *const raw::c_char) -> Option<String> {
+            if ptr.is_null() {
+                None
+            } else {
+                Some(from_raw_cstr_non_null(ptr))
+            }
         }
-    }
 
-    /// Create a *STREAM-START* event.
-    ///
-    /// * If `encoding` is `None`, LibYAML will choose an encoding.
-    pub fn new_stream_start(encoding: Option<Encoding>) -> Result<Self, EventError> {
-        let mut event = Self::new();
+        fn from_raw_cstr_non_null(ptr: *const raw::c_char) -> String {
+            unsafe { ffi::CStr::from_ptr(ptr) }.to_string_lossy().into_owned()
+        }
 
         let ret = unsafe {
-            sys::yaml_stream_start_event_initialize(
-                event.inner.as_mut(),
-                Encoding::option_into_raw(encoding),
-            )
+            match raw.type_ {
+                sys::YAML_STREAM_START_EVENT => {
+                    Ok(Self::StreamStart {
+                        encoding: Encoding::from_raw(raw.data.stream_start.as_ref().encoding),
+                    })
+                },
+                sys::YAML_STREAM_END_EVENT => {
+                    Ok(Self::StreamEnd)
+                },
+                sys::YAML_DOCUMENT_START_EVENT => {
+                    Ok(Self::DocumentStart {
+                        implicit: raw.data.document_start.as_ref().implicit != 0,
+                    })
+
+                    // TODO: handle the remaining attributes.
+                },
+                sys::YAML_DOCUMENT_END_EVENT => {
+                    Ok(Self::DocumentEnd {
+                        implicit: raw.data.document_end.as_ref().implicit != 0,
+                    })
+                },
+                sys::YAML_ALIAS_EVENT => {
+                    Ok(Self::Alias {
+                        anchor: from_raw_cstr_non_null(raw.data.alias.as_ref().anchor as *const _),
+                    })
+                },
+                sys::YAML_SCALAR_EVENT => {
+                    Ok(Self::Scalar {
+                        anchor: from_raw_cstr(raw.data.scalar.as_ref().anchor as *const _),
+                        tag: from_raw_cstr(raw.data.scalar.as_ref().tag as *const _),
+                        value: from_raw_cstr_non_null(raw.data.scalar.as_ref().value as *const _),
+                        plain_implicit: raw.data.scalar.as_ref().plain_implicit != 0,
+                        quoted_implicit: raw.data.scalar.as_ref().quoted_implicit != 0,
+                        style: ScalarStyle::from_raw(raw.data.scalar.as_ref().style),
+                    })
+                },
+                sys::YAML_SEQUENCE_START_EVENT => {
+                    Ok(Self::SequenceStart {
+                        anchor: from_raw_cstr(raw.data.sequence_start.as_ref().anchor as *const _),
+                        tag: from_raw_cstr(raw.data.sequence_start.as_ref().tag as *const _),
+                        implicit: raw.data.sequence_start.as_ref().implicit != 0,
+                        style: SequenceStyle::from_raw(raw.data.sequence_start.as_ref().style),
+                    })
+                },
+                sys::YAML_SEQUENCE_END_EVENT => {
+                    Ok(Self::SequenceEnd)
+                },
+                sys::YAML_MAPPING_START_EVENT => {
+                    Ok(Self::MappingStart {
+                        anchor: from_raw_cstr(raw.data.mapping_start.as_ref().anchor as *const _),
+                        tag: from_raw_cstr(raw.data.mapping_start.as_ref().tag as *const _),
+                        implicit: raw.data.mapping_start.as_ref().implicit != 0,
+                        style: MappingStyle::from_raw(raw.data.mapping_start.as_ref().style),
+                    })
+                },
+                sys::YAML_MAPPING_END_EVENT => {
+                    Ok(Self::MappingEnd)
+                },
+                _ => {
+                    Err(EventError)
+                },
+            }
         };
 
-        if ret == 1 { Ok(event) } else { Err(EventError) }
-    }
-
-    /// Create a *STREAM-END* event.
-    pub fn new_stream_end() -> Result<Self, EventError> {
-        let mut event = Self::new();
-
-        let ret = unsafe {
-            sys::yaml_stream_end_event_initialize(
-                event.inner.as_mut(),
-            )
-        };
-
-        if ret == 1 { Ok(event) } else { Err(EventError) }
-    }
-
-    /// Create a *DOCUMENT-START* event.
-    ///
-    /// * If `implicit` is `true`, no document start mark is to be emitted.
-    pub fn new_document_start(implicit: bool) -> Result<Self, EventError> {
-        let mut event = Self::new();
-
-        let ret = unsafe {
-            sys::yaml_document_start_event_initialize(
-                event.inner.as_mut(),
-                ptr::null_mut(),
-                ptr::null_mut(),
-                ptr::null_mut(),
-                implicit as _,
-            )
-
-            // TODO: all other arguments.
-        };
-
-        if ret == 1 { Ok(event) } else { Err(EventError) }
-    }
-
-    /// Create a *DOCUMENT-END* event.
-    ///
-    /// * If `implicit` is `true`, no document end mark is to be emitted.
-    pub fn new_document_end(implicit: bool) -> Result<Self, EventError> {
-        let mut event = Self::new();
-
-        let ret = unsafe {
-            sys::yaml_document_end_event_initialize(
-                event.inner.as_mut(),
-                implicit as _,
-            )
-        };
-
-        if ret == 1 { Ok(event) } else { Err(EventError) }
-    }
-
-    /// Create an *ALIAS* event.
-    pub fn new_alias(anchor: &str) -> Result<Self, EventError> {
-        let mut event = Self::new();
-
-        let anchor_cs = ffi::CString::new(anchor)?;
-
-        let ret = unsafe {
-            sys::yaml_alias_event_initialize(
-                event.inner.as_mut(),
-                anchor_cs.as_ptr() as *mut _,
-            )
-        };
-
-        if ret == 1 { Ok(event) } else { Err(EventError) }
-    }
-
-    /// Create a *SCALAR* event.
-    ///
-    /// * If `plain_implicit` is `true`, the tag is optional for the plain
-    ///   style.
-    /// * If `quoted_implicit` is `true`, the tag is optional for non-plain
-    ///   styles.
-    /// * If `style` is `None`, LibYAML will choose a style.
-    pub fn new_scalar(
-        anchor: Option<&str>,
-        tag: Option<&str>,
-        value: &str,
-        plain_implicit: bool,
-        quoted_implicit: bool,
-        style: Option<ScalarStyle>,
-    ) -> Result<Self, EventError> {
-        let mut event = Self::new();
-
-        let anchor_cs = anchor.map(ffi::CString::new).transpose()?;
-        let tag_cs = tag.map(ffi::CString::new).transpose()?;
-        let value_cs = ffi::CString::new(value)?;
-
-        let ret = unsafe {
-            sys::yaml_scalar_event_initialize(
-                event.inner.as_mut(),
-                anchor_cs.as_ref().map_or(ptr::null(), |cs| cs.as_ptr()) as *mut _,
-                tag_cs.as_ref().map_or(ptr::null(), |cs| cs.as_ptr()) as *mut _,
-                value_cs.as_ptr() as *mut _,
-                value_cs.as_bytes().len() as _,
-                plain_implicit as _,
-                quoted_implicit as _,
-                ScalarStyle::option_into_raw(style),
-            )
-        };
-
-        if ret == 1 { Ok(event) } else { Err(EventError) }
-    }
-
-    /// Create a *SEQUENCE-START* event.
-    ///
-    /// * If `implicit` is `true`, the tag is optional.
-    /// * If `style` is `None`, LibYAML will choose a style.
-    pub fn new_sequence_start(
-        anchor: Option<&str>,
-        tag: Option<&str>,
-        implicit: bool,
-        style: Option<SequenceStyle>,
-    ) -> Result<Self, EventError> {
-        let mut event = Self::new();
-
-        let anchor_cs = anchor.map(ffi::CString::new).transpose()?;
-        let tag_cs = tag.map(ffi::CString::new).transpose()?;
-
-        let ret = unsafe {
-            sys::yaml_sequence_start_event_initialize(
-                event.inner.as_mut(),
-                anchor_cs.as_ref().map_or(ptr::null(), |cs| cs.as_ptr()) as *mut _,
-                tag_cs.as_ref().map_or(ptr::null(), |cs| cs.as_ptr()) as *mut _,
-                implicit as _,
-                SequenceStyle::option_into_raw(style),
-            )
-        };
-
-        if ret == 1 { Ok(event) } else { Err(EventError) }
-    }
-
-    /// Create a *SEQUENCE-END* event.
-    pub fn new_sequence_end() -> Result<Self, EventError> {
-        let mut event = Self::new();
-
-        let ret = unsafe {
-            sys::yaml_sequence_end_event_initialize(
-                event.inner.as_mut(),
-            )
-        };
-
-        if ret == 1 { Ok(event) } else { Err(EventError) }
-    }
-
-    /// Create a *MAPPING-START* event.
-    ///
-    /// * If `implicit` is `true`, the tag is optional.
-    /// * If `style` is `None`, LibYAML will choose a style.
-    pub fn new_mapping_start(
-        anchor: Option<&str>,
-        tag: Option<&str>,
-        implicit: bool,
-        style: Option<MappingStyle>,
-    ) -> Result<Self, EventError> {
-        let mut event = Self::new();
-
-        let anchor_cs = anchor.map(ffi::CString::new).transpose()?;
-        let tag_cs = tag.map(ffi::CString::new).transpose()?;
-
-        let ret = unsafe {
-            sys::yaml_mapping_start_event_initialize(
-                event.inner.as_mut(),
-                anchor_cs.as_ref().map_or(ptr::null(), |cs| cs.as_ptr()) as *mut _,
-                tag_cs.as_ref().map_or(ptr::null(), |cs| cs.as_ptr()) as *mut _,
-                implicit as _,
-                MappingStyle::option_into_raw(style),
-            )
-        };
-
-        if ret == 1 { Ok(event) } else { Err(EventError) }
-    }
-
-    /// Create a *MAPPING-END* event.
-    pub fn new_mapping_end() -> Result<Self, EventError> {
-        let mut event = Self::new();
-
-        let ret = unsafe {
-            sys::yaml_mapping_end_event_initialize(
-                event.inner.as_mut(),
-            )
-        };
-
-        if ret == 1 { Ok(event) } else { Err(EventError) }
-    }
-
-    /// Return the event type.
-    pub fn type_(&self) -> Option<EventType> {
-        EventType::from_raw(self.inner.type_)
-    }
-
-    /// Return raw pointer to the underlying `yaml_event_t`, consuming this
-    /// structure.
-    pub fn into_raw(mut self) -> *mut sys::yaml_event_t {
-        Box::into_raw(mem::replace(
-            &mut self.inner,
-            Box::new(unsafe { mem::MaybeUninit::zeroed().assume_init() }),
-        ))
-    }
-
-    /// Return raw pointer to the underlying `yaml_event_t`.
-    pub fn as_raw_ptr(&mut self) -> *mut sys::yaml_event_t {
-        &mut *self.inner
-    }
-}
-
-impl Default for Event {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Drop for Event {
-    fn drop(&mut self) {
         unsafe {
-            sys::yaml_event_delete(self.inner.as_mut());
+            sys::yaml_event_delete(&mut raw);
+        }
+
+        ret
+    }
+
+    /// Return the raw `yaml_event_t` for this event.  The caller is responsible
+    /// for freeing memory.
+    pub fn into_raw(self) -> Result<sys::yaml_event_t, EventError> {
+        unsafe {
+            let mut event = mem::MaybeUninit::zeroed().assume_init();
+
+            let ret = match self {
+                Self::StreamStart { encoding } => {
+                    sys::yaml_stream_start_event_initialize(
+                        &mut event,
+                        Encoding::option_into_raw(encoding),
+                    )
+                },
+                Self::StreamEnd => {
+                    sys::yaml_stream_end_event_initialize(
+                        &mut event,
+                    )
+                },
+                Self::DocumentStart { implicit } => {
+                    sys::yaml_document_start_event_initialize(
+                        &mut event,
+                        ptr::null_mut(),
+                        ptr::null_mut(),
+                        ptr::null_mut(),
+                        implicit as _,
+                    )
+
+                    // TODO: handle the remaining attributes.
+                },
+                Self::DocumentEnd { implicit } => {
+                    sys::yaml_document_end_event_initialize(
+                        &mut event,
+                        implicit as _,
+                    )
+                },
+                Self::Alias { anchor } => {
+                    let anchor = ffi::CString::new(anchor)?;
+
+                    sys::yaml_alias_event_initialize(
+                        &mut event,
+                        anchor.as_ptr() as *mut _,
+                    )
+                },
+                Self::Scalar { anchor, tag, value, plain_implicit, quoted_implicit, style } => {
+                    let anchor = anchor.map(ffi::CString::new).transpose()?;
+                    let tag = tag.map(ffi::CString::new).transpose()?;
+                    let value = ffi::CString::new(value)?;
+
+                    sys::yaml_scalar_event_initialize(
+                        &mut event,
+                        anchor.as_ref().map_or(ptr::null(), |cs| cs.as_ptr()) as *mut _,
+                        tag.as_ref().map_or(ptr::null(), |cs| cs.as_ptr()) as *mut _,
+                        value.as_ptr() as *mut _,
+                        value.as_bytes().len() as _,
+                        plain_implicit as _,
+                        quoted_implicit as _,
+                        ScalarStyle::option_into_raw(style),
+                    )
+                },
+                Self::SequenceStart { anchor, tag, implicit, style } => {
+                    let anchor = anchor.map(ffi::CString::new).transpose()?;
+                    let tag = tag.map(ffi::CString::new).transpose()?;
+
+                    sys::yaml_sequence_start_event_initialize(
+                        &mut event,
+                        anchor.as_ref().map_or(ptr::null(), |cs| cs.as_ptr()) as *mut _,
+                        tag.as_ref().map_or(ptr::null(), |cs| cs.as_ptr()) as *mut _,
+                        implicit as _,
+                        SequenceStyle::option_into_raw(style),
+                    )
+                },
+                Self::SequenceEnd => {
+                    sys::yaml_sequence_end_event_initialize(
+                        &mut event,
+                    )
+                },
+                Self::MappingStart { anchor, tag, implicit, style } => {
+                    let anchor = anchor.map(ffi::CString::new).transpose()?;
+                    let tag = tag.map(ffi::CString::new).transpose()?;
+
+                    sys::yaml_mapping_start_event_initialize(
+                        &mut event,
+                        anchor.as_ref().map_or(ptr::null(), |cs| cs.as_ptr()) as *mut _,
+                        tag.as_ref().map_or(ptr::null(), |cs| cs.as_ptr()) as *mut _,
+                        implicit as _,
+                        MappingStyle::option_into_raw(style),
+                    )
+                },
+                Self::MappingEnd => {
+                    sys::yaml_mapping_end_event_initialize(
+                        &mut event,
+                    )
+                },
+            };
+
+            if ret == 1 { Ok(event) } else { Err(EventError) }
         }
     }
 }

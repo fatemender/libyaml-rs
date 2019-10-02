@@ -47,14 +47,7 @@ impl<'a> Emitter<'a> {
 
     /// Emit an event.
     pub fn emit(&mut self, event: Event) -> Result<(), EmitterError> {
-        let ret = unsafe {
-            sys::yaml_emitter_emit(
-                &mut self.inner,
-                event.into_raw(),
-            )
-        };
-
-        if ret == 1 {
+        if unsafe { sys::yaml_emitter_emit(&mut self.inner, &mut event.into_raw()?) } == 1 {
             debug_assert!(self.writer_error.is_none());
             Ok(())
         } else {

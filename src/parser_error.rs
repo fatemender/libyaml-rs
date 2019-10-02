@@ -1,5 +1,7 @@
 use std::io;
 
+use crate::EventError;
+
 /// Error returned from [`Parser`] methods.
 ///
 /// [`Parser`]: struct.Parser.html
@@ -10,4 +12,10 @@ pub enum ParserError {
 
     /// LibYAML error.
     LibYamlError,
+}
+
+impl From<EventError> for ParserError {
+    fn from(_: EventError) -> Self {
+        Self::LibYamlError
+    }
 }

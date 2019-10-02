@@ -21,12 +21,25 @@ pub enum ScalarStyle {
 }
 
 impl ScalarStyle {
-    /// Return the raw `yaml_scalar_style_t`.
+    /// Convert from `yaml_scalar_style_t`; `YAML_ANY_SCALAR_STYLE` becomes
+    /// `None`.
+    pub fn from_raw(raw: sys::yaml_scalar_style_t) -> Option<Self> {
+        match raw {
+            sys::YAML_PLAIN_SCALAR_STYLE => Some(Self::Plain),
+            sys::YAML_SINGLE_QUOTED_SCALAR_STYLE => Some(Self::SingleQuoted),
+            sys::YAML_DOUBLE_QUOTED_SCALAR_STYLE => Some(Self::DoubleQuoted),
+            sys::YAML_LITERAL_SCALAR_STYLE => Some(Self::Literal),
+            sys::YAML_FOLDED_SCALAR_STYLE => Some(Self::Folded),
+            _ => None,
+        }
+    }
+
+    /// Convert to `yaml_scalar_style_t`.
     pub fn into_raw(self) -> sys::yaml_scalar_style_t {
         self as _
     }
 
-    /// Return the raw `yaml_scalar_style_t` where `None` becomes
+    /// Convert to `yaml_scalar_style_t`; `None` becomes
     /// `YAML_ANY_SCALAR_STYLE`.
     pub fn option_into_raw(value: Option<Self>) -> sys::yaml_scalar_style_t {
         value.map_or(sys::YAML_ANY_SCALAR_STYLE, Self::into_raw)
