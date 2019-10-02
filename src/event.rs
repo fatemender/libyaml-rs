@@ -6,6 +6,7 @@ use std::ptr;
 use libyaml_sys as sys;
 
 use crate::{Encoding, EventError, MappingStyle, ScalarStyle, SequenceStyle};
+use crate::{VersionDirective};
 
 /// Emitter or parser event.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -21,6 +22,9 @@ pub enum Event {
 
     /// A *DOCUMENT-START* event.
     DocumentStart {
+        /// Optional version directive.
+        version: Option<VersionDirective>,
+
         /// If true, no document start marker will be emitted.
         implicit: bool,
     },
@@ -122,7 +126,14 @@ impl Event {
                     Ok(Self::StreamEnd)
                 },
                 sys::YAML_DOCUMENT_START_EVENT => {
+                    let version_ptr = raw.data.document_start.as_ref().version_directive;
+
                     Ok(Self::DocumentStart {
+                        version: if version_ptr.is_null() {
+                            None
+                        } else {
+                            Some(VersionDirective::from_raw(*version_ptr))
+                        },
                         implicit: raw.data.document_start.as_ref().implicit != 0,
                     })
 
@@ -201,10 +212,13 @@ impl Event {
                         &mut event,
                     )
                 },
-                Self::DocumentStart { implicit } => {
+                Self::DocumentStart { version, implicit } => {
+                    let version = version.map(VersionDirective::into_raw);
+                    let version_ptr = version.as_ref().map_or(ptr::null(), |v| v);
+
                     sys::yaml_document_start_event_initialize(
                         &mut event,
-                        ptr::null_mut(),
+                        version_ptr as *mut _,
                         ptr::null_mut(),
                         ptr::null_mut(),
                         implicit as _,

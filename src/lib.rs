@@ -69,6 +69,7 @@ pub use self::parser_error::ParserError;
 pub use self::parser_iter::ParserIter;
 pub use self::scalar_style::ScalarStyle;
 pub use self::sequence_style::SequenceStyle;
+pub use self::version_directive::VersionDirective;
 
 mod emitter;
 mod emitter_builder;
@@ -86,3 +87,4 @@ mod parser_error;
 mod parser_iter;
 mod scalar_style;
 mod sequence_style;
+mod version_directive;
