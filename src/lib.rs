@@ -17,6 +17,7 @@ pub use self::mapping_style::MappingStyle;
 pub use self::parser::Parser;
 pub use self::parser_builder::ParserBuilder;
 pub use self::parser_error::ParserError;
+pub use self::parser_iter::ParserIter;
 pub use self::scalar_style::ScalarStyle;
 pub use self::sequence_style::SequenceStyle;
 
@@ -33,5 +34,6 @@ mod mapping_style;
 mod parser;
 mod parser_builder;
 mod parser_error;
+mod parser_iter;
 mod scalar_style;
 mod sequence_style;

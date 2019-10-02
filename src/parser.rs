@@ -5,7 +5,7 @@ use std::slice;
 
 use libyaml_sys as sys;
 
-use crate::{Event, ParserError};
+use crate::{Event, ParserError, ParserIter};
 
 /// Parser.
 pub struct Parser<'a> {
@@ -71,6 +71,15 @@ impl Drop for Parser<'_> {
         unsafe {
             sys::yaml_parser_delete(&mut self.inner);
         }
+    }
+}
+
+impl<'a> IntoIterator for Box<Parser<'a>> {
+    type Item = <ParserIter<'a> as Iterator>::Item;
+    type IntoIter = ParserIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        ParserIter::new(self)
     }
 }
 
