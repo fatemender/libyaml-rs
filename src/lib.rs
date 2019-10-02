@@ -1,6 +1,11 @@
 //! High-level bindings for the [LibYAML] library.
 //!
 //! [LibYAML]: https://github.com/yaml/libyaml
+//!
+//! # Limitations
+//!
+//! * The document API is deliberately unsupported because it is unsafe by
+//!   design.  
 
 pub mod tag;
 
