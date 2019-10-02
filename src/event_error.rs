@@ -2,7 +2,7 @@ use std::ffi;
 
 /// Error returned from [`Event`] methods.
 ///
-/// [`Event`]: struct.Event.html
+/// [`Event`]: enum.Event.html
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct EventError;
 
