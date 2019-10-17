@@ -6,10 +6,10 @@ use std::ptr;
 use libyaml_sys as sys;
 
 use crate::{Encoding, EventError, MappingStyle, ScalarStyle, SequenceStyle};
-use crate::{VersionDirective};
+use crate::{TagDirective, VersionDirective};
 
 /// Emitter or parser event.
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Event {
     /// A *STREAM-START* event.
     StreamStart {
@@ -24,6 +24,9 @@ pub enum Event {
     DocumentStart {
         /// Optional version directive.
         version: Option<VersionDirective>,
+
+        /// List of tag directives, can be empty.
+        tags: Vec<TagDirective>,
 
         /// If true, no document start marker will be emitted.
         implicit: bool,
@@ -127,6 +130,17 @@ impl Event {
                 },
                 sys::YAML_DOCUMENT_START_EVENT => {
                     let version_ptr = raw.data.document_start.as_ref().version_directive;
+                    let mut tag_start_ptr = raw.data.document_start.as_ref().tag_directives.start;
+                    let tag_end_ptr = raw.data.document_start.as_ref().tag_directives.end;
+                    let mut tags = Vec::new();
+
+                    while tag_start_ptr != tag_end_ptr {
+                        tags.push(TagDirective {
+                            handle: from_raw_cstr_non_null((*tag_start_ptr).handle as *const _),
+                            prefix: from_raw_cstr_non_null((*tag_start_ptr).prefix as *const _),
+                        });
+                        tag_start_ptr = tag_start_ptr.offset(1);
+                    }
 
                     Ok(Self::DocumentStart {
                         version: if version_ptr.is_null() {
@@ -134,10 +148,9 @@ impl Event {
                         } else {
                             Some(VersionDirective::from_raw(*version_ptr))
                         },
+                        tags,
                         implicit: raw.data.document_start.as_ref().implicit != 0,
                     })
-
-                    // TODO: handle the remaining attributes.
                 },
                 sys::YAML_DOCUMENT_END_EVENT => {
                     Ok(Self::DocumentEnd {
@@ -212,19 +225,30 @@ impl Event {
                         &mut event,
                     )
                 },
-                Self::DocumentStart { version, implicit } => {
+                Self::DocumentStart { version, tags, implicit } => {
                     let version = version.map(VersionDirective::into_raw);
                     let version_ptr = version.as_ref().map_or(ptr::null(), |v| v);
+
+                    let mut raw_handles = Vec::new();
+                    let mut raw_prefixes = Vec::new();
+                    let mut raw_tags = Vec::new();
+
+                    for tag in tags {
+                        raw_handles.push(ffi::CString::new(tag.handle)?);
+                        raw_prefixes.push(ffi::CString::new(tag.prefix)?);
+                        raw_tags.push(sys::yaml_tag_directive_t {
+                            handle: raw_handles.last().unwrap().as_ptr() as *mut _,
+                            prefix: raw_prefixes.last().unwrap().as_ptr() as *mut _,
+                        });
+                    }
 
                     sys::yaml_document_start_event_initialize(
                         &mut event,
                         version_ptr as *mut _,
-                        ptr::null_mut(),
-                        ptr::null_mut(),
+                        raw_tags.as_ptr() as *mut _,
+                        raw_tags.as_ptr().offset(raw_tags.len() as _) as *mut _,
                         implicit as _,
                     )
-
-                    // TODO: handle the remaining attributes.
                 },
                 Self::DocumentEnd { implicit } => {
                     sys::yaml_document_end_event_initialize(

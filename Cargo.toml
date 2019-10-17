@@ -1,18 +1,16 @@
 [package]
 authors                                 = ["Mikhail Solovev <icee@icee.ru>"]
-# categories                              = ["external-ffi-bindings"]
-# description                             = "Low-level bindings for the LibYAML library"
+categories                              = ["api-bindings", "parser-implementations"]
+description                             = "Low-level bindings for the LibYAML library"
 documentation                           = "https://docs.rs/libyaml"
 edition                                 = "2018"
 homepage                                = "https://github.com/fatemender/libyaml-rs"
-# keywords                                = ["ffi", "libyaml", "yaml"]
+keywords                                = ["libyaml", "yaml"]
 license                                 = "MIT"
 name                                    = "libyaml"
 readme                                  = "README.md"
 repository                              = "https://github.com/fatemender/libyaml-rs"
 version                                 = "0.1.0"
-
-publish                                 = false
 
 [dependencies]
 libyaml-sys                             = "0.1"
