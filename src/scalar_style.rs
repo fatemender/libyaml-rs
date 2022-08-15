@@ -1,4 +1,4 @@
-use libyaml_sys as sys;
+use crate::sys;
 
 /// Scalar style.
 #[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -36,7 +36,13 @@ impl ScalarStyle {
 
     /// Convert to `yaml_scalar_style_t`.
     pub fn into_raw(self) -> sys::yaml_scalar_style_t {
-        self as _
+        match self {
+            Self::Plain => sys::YAML_PLAIN_SCALAR_STYLE,
+            Self::SingleQuoted => sys::YAML_SINGLE_QUOTED_SCALAR_STYLE,
+            Self::DoubleQuoted => sys::YAML_DOUBLE_QUOTED_SCALAR_STYLE,
+            Self::Literal => sys::YAML_LITERAL_SCALAR_STYLE,
+            Self::Folded => sys::YAML_FOLDED_SCALAR_STYLE,
+        }
     }
 
     /// Convert to `yaml_scalar_style_t`; `None` becomes

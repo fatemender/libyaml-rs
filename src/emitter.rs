@@ -3,9 +3,8 @@ use std::mem;
 use std::os::raw;
 use std::slice;
 
-use libyaml_sys as sys;
-
 use crate::{EmitterError, Event};
+use crate::sys;
 
 /// Emitter.
 pub struct Emitter<'a> {
@@ -24,7 +23,7 @@ impl<'a> Emitter<'a> {
     pub fn new<W: io::Write + 'a>(writer: W) -> Result<Box<Self>, EmitterError> {
         let mut inner = unsafe { mem::MaybeUninit::zeroed().assume_init() };
 
-        if unsafe { sys::yaml_emitter_initialize(&mut inner) } == 1 {
+        if unsafe { sys::yaml_emitter_initialize(&mut inner) }.ok {
             let mut emitter = Box::new(Self {
                 inner,
                 writer: Box::new(writer),
@@ -34,7 +33,7 @@ impl<'a> Emitter<'a> {
             unsafe {
                 sys::yaml_emitter_set_output(
                     &mut emitter.inner,
-                    Some(write_handler),
+                    write_handler,
                     emitter.as_mut() as *mut _ as *mut _,
                 );
             }
@@ -47,7 +46,7 @@ impl<'a> Emitter<'a> {
 
     /// Emit an event.
     pub fn emit(&mut self, event: Event) -> Result<(), EmitterError> {
-        if unsafe { sys::yaml_emitter_emit(&mut self.inner, &mut event.into_raw()?) } == 1 {
+        if unsafe { sys::yaml_emitter_emit(&mut self.inner, &mut event.into_raw()?) }.ok {
             debug_assert!(self.writer_error.is_none());
             Ok(())
         } else {
@@ -60,7 +59,7 @@ impl<'a> Emitter<'a> {
 
     /// Flush the emitter buffer to writer.
     pub fn flush(&mut self) -> Result<(), EmitterError> {
-        if unsafe { sys::yaml_emitter_flush(&mut self.inner) } == 1 {
+        if unsafe { sys::yaml_emitter_flush(&mut self.inner) }.ok {
             Ok(())
         } else {
             Err(EmitterError::LibYamlError)
@@ -81,16 +80,20 @@ impl Drop for Emitter<'_> {
     }
 }
 
-unsafe extern fn write_handler(
+unsafe fn write_handler(
     data: *mut raw::c_void,
     buffer: *mut raw::c_uchar,
-    size: usize,
+    mut size: u64,
 ) -> raw::c_int {
     let emitter = &mut *(data as *mut Emitter);
 
-    emitter.writer_error = emitter.writer
-        .write_all(slice::from_raw_parts(buffer, size))
-        .err();
+    while size != 0 {
+        emitter.writer_error = emitter.writer
+            .write_all(slice::from_raw_parts(buffer, size.min(usize::MAX as _) as _))
+            .err();
+
+        size -= size.min(usize::MAX as _);
+    }
 
     if emitter.writer_error.is_none() { 1 } else { 0 }
 }

@@ -1,4 +1,4 @@
-use libyaml_sys as sys;
+use crate::sys;
 
 /// Sequence style.
 #[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -24,7 +24,10 @@ impl SequenceStyle {
 
     /// Convert to `yaml_sequence_style_t`.
     pub fn into_raw(self) -> sys::yaml_sequence_style_t {
-        self as _
+        match self {
+            Self::Block => sys::YAML_BLOCK_SEQUENCE_STYLE,
+            Self::Flow => sys::YAML_FLOW_SEQUENCE_STYLE,
+        }
     }
 
     /// Convert to `yaml_sequence_style_t`; `None` becomes

@@ -3,24 +3,25 @@
 
 # libyaml
 
-This Rust crate provides high-level bindings for the [LibYAML] library,
-version 0.2.2.  It has the following limitations:
+This Rust crate provides high-level bindings for the [LibYAML] library via the
+[`unsafe-libyaml`] crate.  It has the following limitations:
 
-* the `yaml` library must be available on the system, no attempt is made to
-  build it from source;
 * the token and document APIs are currently not implemented.
 
 [LibYAML]: https://github.com/yaml/libyaml
+[`unsafe-libyaml`]: https://github.com/dtolnay/unsafe-libyaml
 
 ## Installation
 
-First, compile LibYAML as a shared or static library and install it.  Then add
-this crate to your `Cargo.toml`:
+Just add this crate to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-libyaml = "0.1.0"
+libyaml = "0.2"
 ```
+
+You do not need to install the LibYAML library on the target system.  Instead,
+`unsafe-libyaml` provides a transpiled version.
 
 ## License
 

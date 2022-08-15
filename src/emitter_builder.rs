@@ -1,8 +1,7 @@
 use std::io;
 
-use libyaml_sys as sys;
-
 use crate::{Emitter, EmitterError, Encoding, LineBreak};
+use crate::sys;
 
 /// Builder for emitters.
 pub struct EmitterBuilder<'a> {

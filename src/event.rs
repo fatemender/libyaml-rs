@@ -3,10 +3,9 @@ use std::mem;
 use std::os::raw;
 use std::ptr;
 
-use libyaml_sys as sys;
-
 use crate::{Encoding, EventError, MappingStyle, ScalarStyle, SequenceStyle};
 use crate::{TagDirective, VersionDirective};
+use crate::sys;
 
 /// Emitter or parser event.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -122,16 +121,16 @@ impl Event {
             match raw.type_ {
                 sys::YAML_STREAM_START_EVENT => {
                     Ok(Self::StreamStart {
-                        encoding: Encoding::from_raw(raw.data.stream_start.as_ref().encoding),
+                        encoding: Encoding::from_raw(raw.data.stream_start.encoding),
                     })
                 },
                 sys::YAML_STREAM_END_EVENT => {
                     Ok(Self::StreamEnd)
                 },
                 sys::YAML_DOCUMENT_START_EVENT => {
-                    let version_ptr = raw.data.document_start.as_ref().version_directive;
-                    let mut tag_start_ptr = raw.data.document_start.as_ref().tag_directives.start;
-                    let tag_end_ptr = raw.data.document_start.as_ref().tag_directives.end;
+                    let version_ptr = raw.data.document_start.version_directive;
+                    let mut tag_start_ptr = raw.data.document_start.tag_directives.start;
+                    let tag_end_ptr = raw.data.document_start.tag_directives.end;
                     let mut tags = Vec::new();
 
                     while tag_start_ptr != tag_end_ptr {
@@ -149,35 +148,35 @@ impl Event {
                             Some(VersionDirective::from_raw(*version_ptr))
                         },
                         tags,
-                        implicit: raw.data.document_start.as_ref().implicit != 0,
+                        implicit: raw.data.document_start.implicit,
                     })
                 },
                 sys::YAML_DOCUMENT_END_EVENT => {
                     Ok(Self::DocumentEnd {
-                        implicit: raw.data.document_end.as_ref().implicit != 0,
+                        implicit: raw.data.document_end.implicit,
                     })
                 },
                 sys::YAML_ALIAS_EVENT => {
                     Ok(Self::Alias {
-                        anchor: from_raw_cstr_non_null(raw.data.alias.as_ref().anchor as *const _),
+                        anchor: from_raw_cstr_non_null(raw.data.alias.anchor as *const _),
                     })
                 },
                 sys::YAML_SCALAR_EVENT => {
                     Ok(Self::Scalar {
-                        anchor: from_raw_cstr(raw.data.scalar.as_ref().anchor as *const _),
-                        tag: from_raw_cstr(raw.data.scalar.as_ref().tag as *const _),
-                        value: from_raw_cstr_non_null(raw.data.scalar.as_ref().value as *const _),
-                        plain_implicit: raw.data.scalar.as_ref().plain_implicit != 0,
-                        quoted_implicit: raw.data.scalar.as_ref().quoted_implicit != 0,
-                        style: ScalarStyle::from_raw(raw.data.scalar.as_ref().style),
+                        anchor: from_raw_cstr(raw.data.scalar.anchor as *const _),
+                        tag: from_raw_cstr(raw.data.scalar.tag as *const _),
+                        value: from_raw_cstr_non_null(raw.data.scalar.value as *const _),
+                        plain_implicit: raw.data.scalar.plain_implicit,
+                        quoted_implicit: raw.data.scalar.quoted_implicit,
+                        style: ScalarStyle::from_raw(raw.data.scalar.style),
                     })
                 },
                 sys::YAML_SEQUENCE_START_EVENT => {
                     Ok(Self::SequenceStart {
-                        anchor: from_raw_cstr(raw.data.sequence_start.as_ref().anchor as *const _),
-                        tag: from_raw_cstr(raw.data.sequence_start.as_ref().tag as *const _),
-                        implicit: raw.data.sequence_start.as_ref().implicit != 0,
-                        style: SequenceStyle::from_raw(raw.data.sequence_start.as_ref().style),
+                        anchor: from_raw_cstr(raw.data.sequence_start.anchor as *const _),
+                        tag: from_raw_cstr(raw.data.sequence_start.tag as *const _),
+                        implicit: raw.data.sequence_start.implicit,
+                        style: SequenceStyle::from_raw(raw.data.sequence_start.style),
                     })
                 },
                 sys::YAML_SEQUENCE_END_EVENT => {
@@ -185,10 +184,10 @@ impl Event {
                 },
                 sys::YAML_MAPPING_START_EVENT => {
                     Ok(Self::MappingStart {
-                        anchor: from_raw_cstr(raw.data.mapping_start.as_ref().anchor as *const _),
-                        tag: from_raw_cstr(raw.data.mapping_start.as_ref().tag as *const _),
-                        implicit: raw.data.mapping_start.as_ref().implicit != 0,
-                        style: MappingStyle::from_raw(raw.data.mapping_start.as_ref().style),
+                        anchor: from_raw_cstr(raw.data.mapping_start.anchor as *const _),
+                        tag: from_raw_cstr(raw.data.mapping_start.tag as *const _),
+                        implicit: raw.data.mapping_start.implicit,
+                        style: MappingStyle::from_raw(raw.data.mapping_start.style),
                     })
                 },
                 sys::YAML_MAPPING_END_EVENT => {
@@ -236,17 +235,18 @@ impl Event {
                     for tag in tags {
                         raw_handles.push(ffi::CString::new(tag.handle)?);
                         raw_prefixes.push(ffi::CString::new(tag.prefix)?);
-                        raw_tags.push(sys::yaml_tag_directive_t {
-                            handle: raw_handles.last().unwrap().as_ptr() as *mut _,
-                            prefix: raw_prefixes.last().unwrap().as_ptr() as *mut _,
-                        });
+
+                        let mut raw_tag: sys::yaml_tag_directive_t = mem::MaybeUninit::zeroed().assume_init();
+                        raw_tag.handle = raw_handles.last().unwrap().as_ptr() as *mut _;
+                        raw_tag.prefix =raw_prefixes.last().unwrap().as_ptr() as *mut _;
+                        raw_tags.push(raw_tag);
                     }
 
                     sys::yaml_document_start_event_initialize(
                         &mut event,
                         version_ptr as *mut _,
                         raw_tags.as_ptr() as *mut _,
-                        raw_tags.as_ptr().offset(raw_tags.len() as _) as *mut _,
+                        raw_tags.as_ptr().add(raw_tags.len()) as *mut _,
                         implicit as _,
                     )
                 },
@@ -316,7 +316,7 @@ impl Event {
                 },
             };
 
-            if ret == 1 { Ok(event) } else { Err(EventError) }
+            if ret.ok { Ok(event) } else { Err(EventError) }
         }
     }
 }

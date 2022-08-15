@@ -1,4 +1,4 @@
-use libyaml_sys as sys;
+use crate::sys;
 
 /// Stream encoding.
 #[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -27,7 +27,11 @@ impl Encoding {
 
     /// Convert to `yaml_encoding_t`.
     pub fn into_raw(self) -> sys::yaml_encoding_t {
-        self as _
+        match self {
+            Self::Utf8 => sys::YAML_UTF8_ENCODING,
+            Self::Utf16Le => sys::YAML_UTF16LE_ENCODING,
+            Self::Utf16Be => sys::YAML_UTF16BE_ENCODING,
+        }
     }
 
     /// Convert to `yaml_encoding_t`; `None` becomes `YAML_ANY_ENCODING`.

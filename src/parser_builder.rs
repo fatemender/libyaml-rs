@@ -1,8 +1,7 @@
 use std::io;
 
-use libyaml_sys as sys;
-
 use crate::{Encoding, Parser, ParserError};
+use crate::sys;
 
 /// Builder for parsers.
 pub struct ParserBuilder<'a> {

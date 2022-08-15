@@ -1,4 +1,6 @@
-use libyaml_sys as sys;
+use std::mem;
+
+use crate::sys;
 
 /// Document version directive.
 #[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -12,9 +14,9 @@ impl VersionDirective {
 
     /// Convert to `yaml_version_directive_t`.
     pub fn into_raw(self) -> sys::yaml_version_directive_t {
-        sys::yaml_version_directive_t {
-            major: self.0 as _,
-            minor: self.1 as _,
-        }
+        let mut ret: sys::yaml_version_directive_t = unsafe { mem::MaybeUninit::zeroed().assume_init() };
+        ret.major = self.0 as _;
+        ret.minor = self.1 as _;
+        ret
     }
 }

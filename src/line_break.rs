@@ -1,4 +1,4 @@
-use libyaml_sys as sys;
+use crate::sys;
 
 /// Line break encoding.
 #[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -17,7 +17,11 @@ pub enum LineBreak {
 impl LineBreak {
     /// Return the raw `yaml_break_t`.
     pub fn into_raw(self) -> sys::yaml_break_t {
-        self as _
+        match self {
+            Self::Cr => sys::YAML_CR_BREAK,
+            Self::Ln => sys::YAML_LN_BREAK,
+            Self::CrLn => sys::YAML_CRLN_BREAK,
+        }
     }
 
     /// Return the raw `yaml_break_t` where `None` becomes `YAML_ANY_BREAK`.

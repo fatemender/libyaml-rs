@@ -1,4 +1,4 @@
-use libyaml_sys as sys;
+use crate::sys;
 
 /// Mapping style.
 #[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -24,7 +24,10 @@ impl MappingStyle {
 
     /// Convert to `yaml_mapping_style_t`.
     pub fn into_raw(self) -> sys::yaml_mapping_style_t {
-        self as _
+        match self {
+            Self::Block => sys::YAML_BLOCK_MAPPING_STYLE,
+            Self::Flow => sys::YAML_FLOW_MAPPING_STYLE,
+        }
     }
 
     /// Convert to `yaml_mapping_style_t`; `None` becomes

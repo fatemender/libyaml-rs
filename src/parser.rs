@@ -3,9 +3,8 @@ use std::mem;
 use std::os::raw;
 use std::slice;
 
-use libyaml_sys as sys;
-
 use crate::{Event, ParserError, ParserIter};
+use crate::sys;
 
 /// Parser.
 ///
@@ -30,7 +29,7 @@ impl<'a> Parser<'a> {
     pub fn new<R: io::Read + 'a>(reader: R) -> Result<Box<Self>, ParserError> {
         let mut inner = unsafe { mem::MaybeUninit::zeroed().assume_init() };
 
-        if unsafe { sys::yaml_parser_initialize(&mut inner) } == 1 {
+        if unsafe { sys::yaml_parser_initialize(&mut inner) }.ok {
             let mut parser = Box::new(Self {
                 inner,
                 reader: Box::new(reader),
@@ -40,7 +39,7 @@ impl<'a> Parser<'a> {
             unsafe {
                 sys::yaml_parser_set_input(
                     &mut parser.inner,
-                    Some(read_handler),
+                    read_handler,
                     parser.as_mut() as *mut _ as *mut _,
                 );
             }
@@ -55,7 +54,7 @@ impl<'a> Parser<'a> {
     pub fn parse(&mut self) -> Result<Event, ParserError> {
         let mut event = unsafe { mem::MaybeUninit::zeroed().assume_init() };
 
-        if unsafe { sys::yaml_parser_parse(&mut self.inner, &mut event) } == 1 {
+        if unsafe { sys::yaml_parser_parse(&mut self.inner, &mut event) }.ok {
             debug_assert!(self.reader_error.is_none());
             Ok(Event::from_raw(event)?)
         } else {
@@ -89,17 +88,17 @@ impl<'a> IntoIterator for Box<Parser<'a>> {
     }
 }
 
-unsafe extern fn read_handler(
+unsafe fn read_handler(
     data: *mut raw::c_void,
     buffer: *mut raw::c_uchar,
-    size: usize,
-    size_read: *mut usize,
+    size: u64,
+    size_read: *mut u64,
 ) -> raw::c_int {
     let parser = &mut *(data as *mut Parser);
 
-    match parser.reader.read(slice::from_raw_parts_mut(buffer, size)) {
+    match parser.reader.read(slice::from_raw_parts_mut(buffer, size.min(usize::MAX as _) as _)) {
         Ok(n) => {
-            *size_read = n;
+            *size_read = n as _;
             parser.reader_error = None;
             1
         },

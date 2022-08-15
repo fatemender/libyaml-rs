@@ -51,6 +51,8 @@
 //!
 //! [`Emitter`]: struct.Emitter.html
 
+#![allow(clippy::unsafe_removed_from_name)]
+
 pub mod tag;
 
 pub use self::emitter::Emitter;
@@ -59,8 +61,6 @@ pub use self::emitter_error::EmitterError;
 pub use self::encoding::Encoding;
 pub use self::event::Event;
 pub use self::event_error::EventError;
-pub use self::lib_version::lib_version;
-pub use self::lib_version_string::lib_version_string;
 pub use self::line_break::LineBreak;
 pub use self::mapping_style::MappingStyle;
 pub use self::parser::Parser;
@@ -78,8 +78,6 @@ mod emitter_error;
 mod encoding;
 mod event;
 mod event_error;
-mod lib_version;
-mod lib_version_string;
 mod line_break;
 mod mapping_style;
 mod parser;
@@ -90,3 +88,5 @@ mod scalar_style;
 mod sequence_style;
 mod tag_directive;
 mod version_directive;
+
+use unsafe_libyaml as sys;
